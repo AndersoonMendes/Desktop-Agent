@@ -1,0 +1,26 @@
+[project]
+name = "desktop-ai-agent"
+version = "0.1.0"
+description = "A local AI agent for safe, natural-language browser automation."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Anderson Mendes" }]
+dependencies = [
+    "httpx>=0.27.0",
+    "playwright>=1.48.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.9.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
