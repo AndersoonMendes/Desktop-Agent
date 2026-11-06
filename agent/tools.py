@@ -1,5 +1,6 @@
+
 from agent.brain import AgentPlan
-from browser.controller import BrowserController
+from browser.controller import BrowserController, PageSnapshot
 from config.settings import Settings
 
 
@@ -9,10 +10,13 @@ class ToolDispatcher:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def execute(self, plan: AgentPlan) -> str:
+    def execute(self, plan: AgentPlan) -> PageSnapshot:
         if plan.action == "search_youtube":
-            browser = BrowserController(headless=self.settings.browser_headless)
-            browser.search_youtube(plan.query)
-            return f"Pesquisa aberta no YouTube: {plan.query}"
+            browser = BrowserController(
+                headless=self.settings.browser_headless
+            )
+            return browser.search_youtube(plan.query)
 
-        raise ValueError(f"Nenhuma ferramenta implementada para: {plan.action}")
+        raise ValueError(
+            f"Nenhuma ferramenta implementada para: {plan.action}"
+        )

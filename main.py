@@ -36,8 +36,19 @@ def main() -> None:
                 print(f"Resposta > {plan.response}\n")
                 continue
 
-            result = tools.execute(plan)
-            print(f"Resultado > {result}\n")
+            snapshot = tools.execute(plan)
+
+            print("\nPágina capturada!")
+            print(f"Título: {snapshot.title}")
+
+            summary = brain.summarize_page(
+                title=snapshot.title,
+                url=snapshot.url,
+                text=snapshot.text,
+            )
+
+            print(f"\nResumo do agente >\n{summary}\n")
+            
         except (
             ValueError,
             TypeError,
