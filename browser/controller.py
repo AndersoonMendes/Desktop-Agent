@@ -1,6 +1,6 @@
-
+import ipaddress
 from dataclasses import dataclass
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus, urlsplit
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
@@ -67,9 +67,7 @@ class BrowserController:
         )
 
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(
-                headless=self.headless
-            )
+            browser = playwright.chromium.launch(headless=self.headless)
 
             try:
                 page = browser.new_page()
@@ -90,18 +88,13 @@ class BrowserController:
                 raw_videos = page.locator("ytd-video-renderer").evaluate_all(
                     """
                     cards => cards.map(card => {
-                        const titleLink = card.querySelector(
-                            'a#video-title'
-                        );
-
+                        const titleLink = card.querySelector('a#video-title');
                         const channelLink = card.querySelector(
                             'ytd-channel-name a'
                         );
-
                         const durationElement = card.querySelector(
                             'ytd-thumbnail-overlay-time-status-renderer span'
                         );
-
                         const metadataElements = card.querySelectorAll(
                             '#metadata-line span'
                         );
@@ -132,6 +125,62 @@ class BrowserController:
 
                 print(f"\nPágina aberta: {snapshot.title}")
                 print(f"Vídeos encontrados: {len(snapshot.videos)}")
+
+                if not self.headless:
+                    input(
+                        "\nPressione Enter no terminal "
+                        "para fechar o navegador..."
+                    )
+
+                return snapshot
+
+            finally:
+                browser.close()
+
+    def open_url(self, url: str) -> PageSnapshot:
+        """Open a public HTTP/HTTPS page and capture its content."""
+        parsed_url = urlsplit(url.strip())
+
+        if (
+            parsed_url.scheme not in {"http", "https"}
+            or not parsed_url.hostname
+            or parsed_url.username
+            or parsed_url.password
+        ):
+            raise ValueError("A URL precisa ser HTTP ou HTTPS válida.")
+
+        hostname = parsed_url.hostname.lower()
+
+        if hostname == "localhost" or hostname.endswith(".localhost"):
+            raise ValueError("Endereços locais não são permitidos.")
+
+        try:
+            address = ipaddress.ip_address(hostname)
+        except ValueError:
+            address = None
+
+        if address is not None and not address.is_global:
+            raise ValueError("Endereços IP privados não são permitidos.")
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=self.headless)
+
+            try:
+                page = browser.new_page()
+                page.goto(
+                    url.strip(),
+                    wait_until="domcontentloaded",
+                    timeout=30000,
+                )
+
+                snapshot = PageSnapshot(
+                    title=page.title(),
+                    url=page.url,
+                    text=page.locator("body").inner_text()[:12000],
+                    videos=[],
+                )
+
+                print(f"\nPágina aberta: {snapshot.title}")
 
                 if not self.headless:
                     input(

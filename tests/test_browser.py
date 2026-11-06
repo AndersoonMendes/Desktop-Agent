@@ -1,6 +1,22 @@
+import pytest
 
-from browser.controller import parse_video_data
+from browser.controller import BrowserController, parse_video_data
 
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://192.168.1.1",
+        "file:///etc/passwd",
+    ],
+)
+def test_open_url_rejects_local_or_invalid_addresses(url):
+    browser = BrowserController(headless=True)
+
+    with pytest.raises(ValueError):
+        browser.open_url(url)   
 
 def test_parse_video_data_returns_video():
     raw_data = [

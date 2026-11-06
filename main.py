@@ -57,6 +57,10 @@ def main() -> None:
             )
 
             print(f"\nResumo do agente >\n{summary}\n")
+            brain.add_context(
+                "assistant",
+                f"Resumo da pesquisa anterior:\n{summary}",
+            )
 
         except (
             ValueError,
