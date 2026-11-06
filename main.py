@@ -38,8 +38,17 @@ def main() -> None:
 
             snapshot = tools.execute(plan)
 
-            print("\nPágina capturada!")
-            print(f"Título: {snapshot.title}")
+            if not snapshot.videos:
+                print("\nNenhum vídeo foi identificado na página.")
+            else:
+                print("\nResultados encontrados:\n")
+
+                for index, video in enumerate(snapshot.videos, start=1):
+                    print(f"{index}. {video.title}")
+                    print(f"   Canal: {video.channel}")
+                    print(f"   Duração: {video.duration}")
+                    print(f"   Informações: {video.metadata}")
+                    print(f"   URL: {video.url}\n")
 
             summary = brain.summarize_page(
                 title=snapshot.title,
@@ -48,7 +57,7 @@ def main() -> None:
             )
 
             print(f"\nResumo do agente >\n{summary}\n")
-            
+
         except (
             ValueError,
             TypeError,
