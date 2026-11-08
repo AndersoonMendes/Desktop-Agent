@@ -18,9 +18,11 @@ Interpret instructions, choose approved tools, and automate browser tasks with P
 
 ## Overview
 
-Desktop AI Agent is an experimental local-first assistant that turns natural-language requests into actions performed by a browser.
-
-The first milestone focuses on a deliberately small and auditable capability set: the agent can interpret a request and search YouTube using a visible Chromium browser. The language model does **not** generate or execute Python or shell commands.
+Desktop AI Agent is a local-first Python application that turns an image of a
+song list into a reviewed, ordered YouTube playback queue. The user approves
+the recognized tracks, selects a video for each track, and confirms the queue
+before playback. The language model does **not** generate or execute Python or
+shell commands.
 
 ## Features
 
@@ -29,7 +31,12 @@ The first milestone focuses on a deliberately small and auditable capability set
 - Structured action plans returned as JSON.
 - Explicit allowlist of supported actions.
 - Browser automation with Playwright.
-- Unit tests for action-plan validation.
+- Ordered image recognition and manual review.
+- Explicit YouTube candidate selection for each track.
+- Browser-independent queue with per-track states.
+- Automatic ordered playback through YouTube's IFrame Player API.
+- Per-track playback state and failed-embed reporting.
+- Unit tests for parsing, queue state, selection, and playback fallbacks.
 
 ## Architecture
 
@@ -51,16 +58,19 @@ flowchart TD
 ```text
 desktop-ai-agent/
 ├── agent/
-│   ├── brain.py          # LLM request and structured plan validation
-│   └── tools.py          # Allowlisted tool dispatcher
+│   ├── brain.py          # Ollama vision, planning, and response validation
+│   └── tools.py          # Tool and playback dispatch
+├── music/
+│   ├── models.py         # Track, video candidate, and queue status models
+│   └── queue.py          # Ordered queue state, independent of Playwright
 ├── browser/
-│   └── controller.py     # Playwright browser operations
+│   └── controller.py     # YouTube search and confirmed URL playback
 ├── config/
 │   └── settings.py       # Environment-based configuration
-├── tests/
-│   └── test_brain.py     # Plan validation tests
+├── tests/                # Parsing, selection, queue, and browser tests
 ├── docs/
-│   └── architecture.md   # Architecture notes
+│   ├── architecture.md   # Architecture notes
+│   └── whatsapp-image-intake.md # Initial WhatsApp integration research
 ├── .github/workflows/
 │   └── tests.yml         # Continuous integration
 ├── main.py               # CLI entry point
@@ -87,13 +97,14 @@ cd desktop-ai-agent
 
 ```bash
 uv sync --all-groups
-uv run playwright install chromium
+uv run playwright install chrome
 ```
 
-On Linux, if Chromium reports missing system libraries, run:
+Playwright installs a managed Google Chrome build. On Linux/WSL, if Chrome
+reports missing system libraries, run:
 
 ```bash
-uv run playwright install --with-deps chromium
+uv run playwright install --with-deps chrome
 ```
 
 ### 3. Start Ollama
@@ -118,7 +129,40 @@ Example instruction:
 Pesquise músicas eletrônicas no YouTube
 ```
 
-The agent will validate the requested action, open Chromium, and display YouTube search results. Press Enter in the terminal to close the browser.
+To read a song list from an image and play the songs in order, enter:
+
+```text
+/imagem /caminho/para/lista.png
+```
+
+You can also type `/imagem` and provide the path when prompted. The configured
+Ollama model must support image input. The agent shows the recognized songs in
+visual order and asks you to confirm or edit each item before starting any
+search. Items the model could not read are marked as ambiguous and must be
+resolved or the flow cancelled. After confirmation, YouTube candidates are
+listed for each song. Choose a candidate explicitly or enter `p` to leave that
+song pending. This prompt repeats for each track; choosing a number only saves
+that track's video and moves to the next search. After all tracks, review the
+queue and type `s` at the final prompt to start. A local player page opens in
+your normal browser with the selected videos loaded through YouTube's supported
+IFrame Player API. Click **Iniciar reprodução** once; the player then advances
+through the queue and reports completion/errors to the CLI. Use YouTube's own
+controls to pause or resume, or click **Parar fila** to stop.
+
+Some videos do not allow embedded playback. The player reports those as failed
+and advances; open that candidate's regular YouTube page manually if needed.
+The app does not extract media streams, bypass ads, or work around YouTube's
+embed restrictions.
+
+`/login_youtube` opens the regular YouTube page in your system browser if you
+need to sign in manually. The embedded player can still reject videos that
+require a top-level YouTube session.
+
+## WhatsApp image intake research
+
+The initial feasibility analysis for selecting the newest image from a
+WhatsApp Web group is in [`docs/whatsapp-image-intake.md`](docs/whatsapp-image-intake.md).
+No WhatsApp chat content is read by the current application.
 
 ## Configuration
 
@@ -129,6 +173,12 @@ Configuration is read from environment variables:
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama API base URL |
 | `OLLAMA_MODEL` | `qwen3.5:4b` | Local model name |
 | `BROWSER_HEADLESS` | `false` | Run Chromium without a visible window |
+| `BROWSER_CHANNEL` | `chrome` | Playwright browser channel; set empty to use bundled Chromium |
+
+Image recognition requires a vision-capable Ollama model. Images are sent only
+to the configured Ollama endpoint. `BROWSER_HEADLESS` and `BROWSER_CHANNEL`
+control the isolated browser used to search YouTube candidates; playback opens
+in the normal system browser. On WSL, Windows' default browser is used.
 
 Example:
 
@@ -172,7 +222,9 @@ This is an educational project. Do not connect it to sensitive accounts or unatt
 - [x] Local Ollama connection
 - [x] Structured action planning
 - [x] Allowlisted tool execution
-- [x] YouTube browser search
+- [x] Ordered image recognition and manual review
+- [x] Candidate selection and independent queue
+- [x] Sequential playback of selected URLs
 - [ ] Conversation memory
 - [ ] LangGraph workflow orchestration
 - [ ] Voice input and speech output

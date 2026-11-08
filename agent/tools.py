@@ -1,6 +1,8 @@
 from agent.brain import AgentPlan
 from browser.controller import BrowserController, PageSnapshot
 from config.settings import Settings
+from music.models import MusicTrack, VideoCandidate
+from music.queue import MusicQueue
 
 
 class ToolDispatcher:
@@ -11,7 +13,8 @@ class ToolDispatcher:
 
     def execute(self, plan: AgentPlan) -> PageSnapshot:
         browser = BrowserController(
-            headless=self.settings.browser_headless
+            headless=self.settings.browser_headless,
+            channel=self.settings.browser_channel,
         )
 
         if plan.action == "search_youtube":
@@ -23,3 +26,25 @@ class ToolDispatcher:
         raise ValueError(
             f"Nenhuma ferramenta implementada para: {plan.action}"
         )
+
+    def search_track_candidates(self, track: MusicTrack) -> list[VideoCandidate]:
+        query = f"{track.title} {track.artist}".strip()
+        browser = BrowserController(
+            headless=self.settings.browser_headless,
+            channel=self.settings.browser_channel,
+        )
+        return browser.search_track_candidates(query)
+
+    def play_queue(self, queue: MusicQueue) -> None:
+        browser = BrowserController(
+            headless=self.settings.browser_headless,
+            channel=self.settings.browser_channel,
+        )
+        browser.play_queue(queue)
+
+    def login_youtube(self) -> None:
+        browser = BrowserController(
+            headless=self.settings.browser_headless,
+            channel=self.settings.browser_channel,
+        )
+        browser.login_youtube()

@@ -1,14 +1,20 @@
+import base64
 import json
+import mimetypes
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
 
 from config.settings import Settings
+from music.models import MusicTrack
 
 ALLOWED_ACTIONS = {"search_youtube", "open_url", "answer"}
 MAX_HISTORY_MESSAGES = 10
 MAX_MESSAGE_CHARS = 3000
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
+MAX_SONGS = 50
 
 
 @dataclass(frozen=True)
@@ -73,6 +79,63 @@ def parse_plan(raw_content: str) -> AgentPlan:
         response=response.strip(),
         reason=reason.strip(),
     )
+
+
+def parse_song_list(raw_content: str) -> list[MusicTrack]:
+    """Parse ordered songs, retaining items the vision model could not read."""
+    try:
+        payload = json.loads(raw_content)
+    except json.JSONDecodeError as exc:
+        raise ValueError("O modelo não retornou uma lista de músicas em JSON válido.") from exc
+
+    if not isinstance(payload, dict):
+        raise TypeError("A resposta do modelo precisa ser um objeto JSON.")
+    if not isinstance(payload.get("songs"), list):
+        raise TypeError("A resposta precisa conter uma lista de músicas no campo songs.")
+
+    songs = payload["songs"]
+
+    if not songs or len(songs) > MAX_SONGS:
+        raise ValueError(f"A imagem precisa conter entre 1 e {MAX_SONGS} músicas.")
+
+    tracks = []
+    for expected_position, item in enumerate(songs, start=1):
+        if not isinstance(item, dict):
+            raise TypeError("Cada música precisa ser um objeto com título e artista.")
+
+        if not {"position", "title", "artist", "ambiguous"}.issubset(item):
+            raise ValueError("Cada música precisa informar posição, título, artista e ambiguidade.")
+
+        position = item["position"]
+        title = item["title"]
+        artist = item["artist"]
+        ambiguous = item["ambiguous"]
+        note = item.get("note", "")
+
+        if type(position) is not int or position != expected_position:
+            raise ValueError("As posições precisam seguir a ordem da imagem sem lacunas.")
+        if not all(isinstance(value, str) for value in (title, artist, note)):
+            raise TypeError("Título, artista e observação precisam ser textos.")
+        if not isinstance(ambiguous, bool):
+            raise TypeError("O campo ambiguous precisa ser verdadeiro ou falso.")
+
+        title, artist, note = title.strip(), artist.strip(), note.strip()
+        if len(title) > 200 or len(artist) > 200 or len(note) > 300:
+            raise ValueError("Os dados de cada música excedem o tamanho permitido.")
+        if not title and not ambiguous:
+            raise ValueError("Uma música sem título precisa estar marcada como ambígua.")
+
+        tracks.append(
+            MusicTrack(
+                position=expected_position,
+                title=title,
+                artist=artist,
+                ambiguous=ambiguous,
+                note=note,
+            )
+        )
+
+    return tracks
 
 
 class AgentBrain:
@@ -171,6 +234,78 @@ Nunca invente outras ações. Nunca solicite execução de comandos do sistema.
         self.add_context("assistant", assistant_message)
 
         return plan
+
+    def recognize_songs(self, image_path: str) -> list[MusicTrack]:
+        """Read an ordered and reviewable song list from an image."""
+        path = Path(image_path).expanduser()
+
+        if not path.is_file():
+            raise ValueError(f"Arquivo de imagem não encontrado: {path}")
+
+        mime_type, _ = mimetypes.guess_type(path.name)
+        if mime_type not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
+            raise ValueError("Use uma imagem JPG, PNG, WebP ou GIF.")
+
+        image_bytes = path.read_bytes()
+
+        if not image_bytes:
+            raise ValueError("O arquivo de imagem está vazio.")
+        if len(image_bytes) > MAX_IMAGE_BYTES:
+            raise ValueError("A imagem deve ter no máximo 20 MB.")
+
+        system_prompt = (
+            "Identifique os itens que parecem músicas na imagem. Preserve a ordem visual "
+            "de cima para baixo e da esquerda para a direita. Não invente nem complete "
+            "texto ilegível. Para cada item, retorne posição sequencial, título, artista "
+            "se estiver visível, se é ambíguo e uma observação curta. Se não conseguir "
+            "ler o título, use title vazio e ambiguous true. Responda somente neste JSON: "
+            '{"songs":[{"position":1,"title":"...","artist":"...",'
+            '"ambiguous":false,"note":""}]}'
+        )
+        encoded_image = base64.b64encode(image_bytes).decode("ascii")
+        last_error = None
+
+        for attempt in range(2):
+            retry_instruction = (
+                " A tentativa anterior não produziu JSON válido. Analise a imagem de novo "
+                "e retorne exclusivamente o objeto JSON solicitado, sem Markdown ou texto extra."
+                if attempt
+                else ""
+            )
+            response = httpx.post(
+                f"{self.settings.ollama_base_url.rstrip('/')}/api/chat",
+                json={
+                    "model": self.settings.ollama_model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": system_prompt + retry_instruction,
+                        },
+                        {
+                            "role": "user",
+                            "content": "Identifique e ordene os itens musicais desta imagem.",
+                            "images": [encoded_image],
+                        },
+                    ],
+                    "format": "json",
+                    "stream": False,
+                    "options": {"temperature": 0.0},
+                },
+                timeout=120.0,
+            )
+            response.raise_for_status()
+            content = response.json().get("message", {}).get("content", "")
+
+            try:
+                return parse_song_list(content)
+            except (TypeError, ValueError) as exc:
+                last_error = exc
+
+        excerpt = " ".join(content.split())[:200] or "<resposta vazia>"
+        raise ValueError(
+            "Ollama não retornou uma lista de músicas válida após duas tentativas. "
+            f"Trecho da última resposta: {excerpt}"
+        ) from last_error
 
     def summarize_page(self, title: str, url: str, text: str) -> str:
         if not text.strip():
