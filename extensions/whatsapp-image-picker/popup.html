@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Imagem do WhatsApp</title>
+    <style>
+      body { width: 290px; margin: 16px; color: #202124; font: 14px/1.45 Arial, sans-serif; }
+      h1 { margin: 0 0 8px; font-size: 17px; }
+      p { margin: 0 0 12px; }
+      button { width: 100%; padding: 10px; border: 0; border-radius: 6px; background: #087f5b; color: white; cursor: pointer; }
+      button:disabled { background: #9aa0a6; cursor: default; }
+      #status { min-height: 38px; margin-top: 10px; color: #5f6368; }
+    </style>
+  </head>
+  <body>
+    <h1>Imagem do WhatsApp</h1>
+    <p>Abra o grupo e deixe a conversa nas mensagens mais recentes.</p>
+    <button id="scan">Procurar imagens</button>
+    <div id="status" role="status" aria-live="polite"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -70,6 +70,8 @@ somente a imagem mais recente, confirmação visual e transmissão apenas para
 
 O comando `/imagem-recente` está implementado para arquivos que o usuário salva
 na pasta de entrada. A extensão e a integração direta com WhatsApp ainda não
-foram implementadas. A implementação automática fica condicionada a validar a
-seleção da imagem correta no WhatsApp Web sem depender de acesso ao perfil
-inteiro do Chrome.
+foram implementadas. Um protótipo de extensão local está em
+[`chrome-whatsapp-extension.md`](chrome-whatsapp-extension.md). Ele usa a aba
+ativa após ação explícita, oferece prévias e salva somente a imagem confirmada
+na pasta de Downloads. Não lê o histórico completo nem tem integração
+automática com o processo Python.

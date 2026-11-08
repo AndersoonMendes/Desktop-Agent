@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Desktop AI Agent — WhatsApp image picker",
+  "version": "0.1.0",
+  "description": "Escolhe e salva uma imagem do grupo aberto no WhatsApp Web.",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_title": "Selecionar imagem do WhatsApp",
+    "default_popup": "popup.html"
+  }
+}

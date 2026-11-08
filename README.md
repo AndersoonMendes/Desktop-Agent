@@ -178,8 +178,14 @@ require a top-level YouTube session.
 
 The initial feasibility analysis for selecting the newest image from a
 WhatsApp Web group is in [`docs/whatsapp-image-intake.md`](docs/whatsapp-image-intake.md).
-No WhatsApp chat content is read automatically by the current application.
-For now, save the image into `IMAGE_INBOX` and run `/imagem-recente`.
+An unpacked local Chrome extension prototype is in
+[`extensions/whatsapp-image-picker`](extensions/whatsapp-image-picker), with
+setup instructions in
+[`docs/chrome-whatsapp-extension.md`](docs/chrome-whatsapp-extension.md). It
+shows loaded image previews from the active WhatsApp conversation and downloads
+only the image you confirm. Configure Chrome's download folder as `IMAGE_INBOX`,
+then run `/imagem-recente` in the agent. The extension does not scan all chat
+history or automatically start image recognition.
 
 ## Configuration
 
