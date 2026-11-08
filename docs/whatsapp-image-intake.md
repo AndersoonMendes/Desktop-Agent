@@ -35,6 +35,13 @@ estável: mudanças do site podem exigir manutenção. O primeiro protótipo dev
 exigir que o usuário abra o grupo, verificar o nome do grupo na tela e mostrar
 uma prévia da imagem selecionada antes de processá-la.
 
+O Manifest V3 do Chrome permite declarar acesso por site e permissões opcionais;
+uma extensão pode limitar o host solicitado a `web.whatsapp.com`. A API de
+downloads do Chrome também permite iniciar e acompanhar o salvamento de um
+arquivo, mas exige a permissão `downloads`. Referências: [permissões e host
+permissions](https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions)
+e [API de downloads](https://developer.chrome.com/docs/extensions/reference/api/downloads/).
+
 ### 2. Chrome DevTools Protocol — possível, mas concede acesso amplo
 
 O agente poderia conectar via CDP a um Chrome iniciado explicitamente com uma
@@ -43,24 +50,26 @@ interagir com a página existente, mas dá ao processo acesso amplo às abas des
 Chrome e exige encerrar e reiniciar o navegador com configuração especial. Não
 é a primeira escolha para este aplicativo.
 
-### 3. Pasta de entrada — alternativa simples e robusta
+### 3. Pasta de entrada — disponível agora
 
-O usuário baixa a foto do WhatsApp para `images/`; o agente escolhe a imagem
-mais recente dessa pasta e inicia o fluxo atual. Isso não captura mensagens do
-grupo automaticamente, mas mantém o processamento desacoplado da interface do
-WhatsApp e oferece uma primeira entrega estável.
+O usuário salva a foto do WhatsApp em `images/` (ou configura `IMAGE_INBOX` para
+apontar à pasta Downloads); `/imagem-recente` mostra o arquivo mais novo e pede
+confirmação antes de iniciar o fluxo atual. Isso não captura mensagens do grupo
+automaticamente, mas evita digitar o caminho da imagem.
+
+“Mais novo” aqui significa o arquivo com modificação local mais recente dentro
+da pasta configurada, não a imagem mais recente pela data do chat do WhatsApp.
 
 ## Próximo protótipo recomendado
 
-Começar com a pasta `images/` e um comando `/imagem-recente`, que mostra nome,
-data e prévia da imagem antes da confirmação. Em paralelo, validar uma extensão
-local com escopo restrito: grupo explicitamente escolhido, somente a imagem
-mais recente, confirmação visual e transmissão apenas para `localhost`. Não
-ler nem armazenar o histórico completo do grupo.
+Validar uma extensão local com escopo restrito: grupo explicitamente escolhido,
+somente a imagem mais recente, confirmação visual e transmissão apenas para
+`localhost`. Não ler nem armazenar o histórico completo do grupo.
 
 ## Estado
 
-Esta é uma avaliação inicial. A extensão e a integração com WhatsApp ainda não
+O comando `/imagem-recente` está implementado para arquivos que o usuário salva
+na pasta de entrada. A extensão e a integração direta com WhatsApp ainda não
 foram implementadas. A implementação automática fica condicionada a validar a
 seleção da imagem correta no WhatsApp Web sem depender de acesso ao perfil
 inteiro do Chrome.

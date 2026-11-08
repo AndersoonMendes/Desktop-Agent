@@ -35,6 +35,13 @@ class ToolDispatcher:
         )
         return browser.search_track_candidates(query)
 
+    def get_playlist_videos(self, url: str) -> list[VideoCandidate]:
+        browser = BrowserController(
+            headless=self.settings.browser_headless,
+            channel=self.settings.browser_channel,
+        )
+        return browser.get_playlist_videos(url)
+
     def play_queue(self, queue: MusicQueue) -> None:
         browser = BrowserController(
             headless=self.settings.browser_headless,

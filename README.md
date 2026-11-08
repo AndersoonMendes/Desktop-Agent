@@ -149,6 +149,22 @@ IFrame Player API. Click **Iniciar reprodução** once; the player then advances
 through the queue and reports completion/errors to the CLI. Use YouTube's own
 controls to pause or resume, or click **Parar fila** to stop.
 
+To process the newest image you saved from WhatsApp or another app into the
+inbox folder, use `/imagem-recente`. The agent shows the selected filename and
+time and asks you to confirm before reading it. Set `IMAGE_INBOX` to point at a
+different folder, such as a Windows Downloads directory mounted under `/mnt/c`.
+
+To import a public YouTube playlist, enter `/playlist` followed by its link:
+
+```text
+/playlist https://www.youtube.com/playlist?list=PLAYLIST_ID
+```
+
+The agent displays the videos in the order shown by YouTube and asks before
+opening the queue. Private playlists and unavailable videos may not be
+accessible. To try image inbox intake, copy an image into `images/`, run
+`/imagem-recente`, check the displayed filename, and press Enter to confirm.
+
 Some videos do not allow embedded playback. The player reports those as failed
 and advances; open that candidate's regular YouTube page manually if needed.
 The app does not extract media streams, bypass ads, or work around YouTube's
@@ -162,7 +178,8 @@ require a top-level YouTube session.
 
 The initial feasibility analysis for selecting the newest image from a
 WhatsApp Web group is in [`docs/whatsapp-image-intake.md`](docs/whatsapp-image-intake.md).
-No WhatsApp chat content is read by the current application.
+No WhatsApp chat content is read automatically by the current application.
+For now, save the image into `IMAGE_INBOX` and run `/imagem-recente`.
 
 ## Configuration
 
@@ -174,11 +191,13 @@ Configuration is read from environment variables:
 | `OLLAMA_MODEL` | `qwen3.5:4b` | Local model name |
 | `BROWSER_HEADLESS` | `false` | Run Chromium without a visible window |
 | `BROWSER_CHANNEL` | `chrome` | Playwright browser channel; set empty to use bundled Chromium |
+| `IMAGE_INBOX` | `images` | Folder searched by `/imagem-recente` |
 
 Image recognition requires a vision-capable Ollama model. Images are sent only
 to the configured Ollama endpoint. `BROWSER_HEADLESS` and `BROWSER_CHANNEL`
 control the isolated browser used to search YouTube candidates; playback opens
-in the normal system browser. On WSL, Windows' default browser is used.
+in the normal system browser. On WSL, Windows' default browser is used. Set an
+inbox folder from WSL with, for example, `export IMAGE_INBOX="/mnt/c/Users/you/Downloads"`.
 
 Example:
 

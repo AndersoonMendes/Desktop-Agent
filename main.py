@@ -1,7 +1,10 @@
+from datetime import datetime
+
 import httpx
 from playwright.sync_api import Error as PlaywrightError
 
 from agent.brain import AgentBrain
+from agent.image_input import find_latest_image
 from agent.tools import ToolDispatcher
 from config.settings import Settings
 from music.models import MusicTrack, QueueStatus, VideoCandidate
@@ -118,6 +121,8 @@ def main() -> None:
     print("Digite uma tarefa em linguagem natural ou 'sair' para encerrar.")
     print("Exemplo: Pesquise músicas eletrônicas no YouTube")
     print("Para tocar músicas de uma imagem: /imagem caminho/da/imagem.png\n")
+    print("Para usar a imagem mais recente da pasta de entrada: /imagem-recente\n")
+    print("Para importar uma playlist do YouTube: /playlist URL\n")
     print("Para abrir o YouTube no navegador: /login_youtube\n")
 
     while True:
@@ -138,12 +143,54 @@ def main() -> None:
                 tools.login_youtube()
                 continue
 
-            if instruction.lower() == "/imagem" or instruction.lower().startswith(
-                "/imagem "
+            if instruction.lower().startswith("/playlist"):
+                playlist_url = instruction[len("/playlist") :].strip()
+                if not playlist_url:
+                    playlist_url = input("Link da playlist do YouTube > ").strip()
+                videos = tools.get_playlist_videos(playlist_url)
+                if not videos:
+                    print("Nenhum vídeo acessível foi encontrado nessa playlist.\n")
+                    continue
+
+                tracks = [
+                    MusicTrack(position=index, title=video.title)
+                    for index, video in enumerate(videos, start=1)
+                ]
+                queue = MusicQueue(tracks)
+                for track, video in zip(tracks, videos):
+                    queue.select(track.position, video)
+                print(f"Playlist importada: {len(videos)} vídeo(s), na ordem do YouTube.")
+                print_queue(queue)
+                start_playback = input(
+                    "Digite 's' para abrir a fila no navegador ou Enter para parar > "
+                ).strip().lower()
+                if start_playback in {"s", "sim"}:
+                    tools.play_queue(queue)
+                    print_queue(queue)
+                continue
+
+            if (
+                instruction.lower() == "/imagem-recente"
+                or instruction.lower() == "/imagem"
+                or instruction.lower().startswith("/imagem ")
             ):
-                image_path = instruction[len("/imagem") :].strip()
-                if not image_path:
-                    image_path = input("Caminho da imagem > ").strip()
+                if instruction.lower() == "/imagem-recente":
+                    image_path = find_latest_image(settings.image_inbox)
+                    modified = datetime.fromtimestamp(image_path.stat().st_mtime)
+                    print(
+                        f"Imagem mais recente: {image_path} "
+                        f"(alterada em {modified:%Y-%m-%d %H:%M})"
+                    )
+                    confirmation = input(
+                        "Enter para usar esta imagem ou 'c' para cancelar > "
+                    ).strip().lower()
+                    if confirmation in {"c", "cancelar", "sair"}:
+                        print("Seleção da imagem cancelada.\n")
+                        continue
+                else:
+                    image_path = instruction[len("/imagem") :].strip()
+                    if not image_path:
+                        image_path = input("Caminho da imagem > ").strip()
                 if not image_path:
                     print("Erro > Informe o caminho da imagem.\n")
                     continue

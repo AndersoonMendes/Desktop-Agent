@@ -8,6 +8,7 @@ class Settings:
     ollama_model: str = "qwen3.5:4b"
     browser_headless: bool = False
     browser_channel: str | None = "chrome"
+    image_inbox: str = "images"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -19,4 +20,5 @@ class Settings:
             browser_headless=os.getenv("BROWSER_HEADLESS", "false").lower()
             in {"1", "true", "yes"},
             browser_channel=os.getenv("BROWSER_CHANNEL", "chrome").strip() or None,
+            image_inbox=os.getenv("IMAGE_INBOX", "images").strip() or "images",
         )

@@ -1,4 +1,4 @@
-from queue import Queue
+from queue import Empty, Queue
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -192,9 +192,9 @@ def video_candidate(video_id):
 
 
 class FakePlaylistServer:
-    def __init__(self, items, events):
+    def __init__(self, items, events, empty_polls=0):
         self.items = items
-        self.events = Queue()
+        self.events = FakeEventQueue(empty_polls)
         for event in events:
             self.events.put(event)
         self.url = "http://127.0.0.1:12345/"
@@ -206,11 +206,23 @@ class FakePlaylistServer:
         return None
 
 
-def install_fake_playlist_server(monkeypatch, events):
+class FakeEventQueue(Queue):
+    def __init__(self, empty_polls=0):
+        super().__init__()
+        self.empty_polls = empty_polls
+
+    def get(self, block=True, timeout=None):
+        if self.empty_polls:
+            self.empty_polls -= 1
+            raise Empty
+        return super().get(block=block, timeout=timeout)
+
+
+def install_fake_playlist_server(monkeypatch, events, empty_polls=0):
     servers = []
 
     def create_server(items):
-        server = FakePlaylistServer(items, events)
+        server = FakePlaylistServer(items, events, empty_polls)
         servers.append(server)
         return server
 
@@ -314,6 +326,25 @@ def test_play_queue_tracks_iframe_ended_events_in_original_order(monkeypatch):
         QueueStatus.PENDING,
         QueueStatus.PLAYED,
     ]
+
+
+def test_play_queue_survives_empty_event_poll_before_player_responds(monkeypatch):
+    queue = MusicQueue([MusicTrack(position=1, title="Faixa")])
+    queue.select(1, video_candidate("one"))
+    install_fake_playlist_server(
+        monkeypatch,
+        [
+            {"type": "ready"},
+            {"type": "playing", "index": 0, "video_id": "one"},
+            {"type": "ended", "index": 0, "video_id": "one"},
+        ],
+        empty_polls=1,
+    )
+    monkeypatch.setattr(BrowserController, "_open_external_url", lambda _self, _url: None)
+
+    BrowserController().play_queue(queue)
+
+    assert queue.entries[0].status is QueueStatus.PLAYED
 
 
 def test_play_queue_marks_embed_error_and_continues(monkeypatch):

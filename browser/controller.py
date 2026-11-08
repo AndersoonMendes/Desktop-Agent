@@ -6,6 +6,7 @@ import time
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
+from queue import Empty as QueueEmpty
 from urllib.parse import parse_qs, quote_plus, urlencode, urlsplit
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -71,6 +72,23 @@ def normalize_youtube_watch_url(url: str) -> str | None:
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", video_id):
         return None
     return f"https://www.youtube.com/watch?{urlencode({'v': video_id})}"
+
+
+def normalize_youtube_playlist_url(url: str) -> str | None:
+    """Accept standard YouTube playlist links and return their canonical URL."""
+    parsed = urlsplit(url.strip())
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname not in {"www.youtube.com", "youtube.com", "m.youtube.com"}
+        or parsed.path not in {"/playlist", "/watch"}
+        or parsed.username
+        or parsed.password
+    ):
+        return None
+    playlist_id = parse_qs(parsed.query).get("list", [""])[0]
+    if not re.fullmatch(r"[A-Za-z0-9_-]{10,100}", playlist_id):
+        return None
+    return f"https://www.youtube.com/playlist?{urlencode({'list': playlist_id})}"
 
 
 class BrowserController:
@@ -304,6 +322,66 @@ class BrowserController:
             finally:
                 browser.close()
 
+    def get_playlist_videos(self, url: str) -> list[VideoCandidate]:
+        """Read the visible videos of a public YouTube playlist in page order."""
+        playlist_url = normalize_youtube_playlist_url(url)
+        if not playlist_url:
+            raise ValueError("Informe um link válido de playlist do YouTube.")
+
+        with sync_playwright() as playwright:
+            browser = self._launch_browser(playwright)
+            try:
+                page = browser.new_page()
+                page.goto(playlist_url, wait_until="domcontentloaded", timeout=60000)
+                rows = page.locator("ytd-playlist-video-renderer")
+                try:
+                    rows.first.wait_for(state="attached", timeout=15000)
+                except PlaywrightTimeoutError:
+                    return []
+
+                # Playlist rows are lazy-loaded; scroll until the visible count stops growing.
+                previous_count = -1
+                stable_rounds = 0
+                while stable_rounds < 3:
+                    count = rows.count()
+                    stable_rounds = stable_rounds + 1 if count == previous_count else 0
+                    previous_count = count
+                    page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+                    page.wait_for_timeout(700)
+
+                raw_videos = rows.evaluate_all(
+                    """
+                    items => items.map(item => {
+                        const link = item.querySelector('a#video-title');
+                        const channel = item.querySelector('ytd-channel-name a');
+                        const duration = item.querySelector(
+                            'ytd-thumbnail-overlay-time-status-renderer span'
+                        );
+                        return {
+                            title: link?.getAttribute('title') || link?.textContent?.trim() || '',
+                            channel: channel?.textContent?.trim() || 'Canal desconhecido',
+                            duration: duration?.textContent?.trim() || 'Não informada',
+                            metadata: '',
+                            url: link?.href || ''
+                        };
+                    })
+                    """
+                )
+                videos = []
+                for video in parse_video_data(raw_videos):
+                    video_url = normalize_youtube_watch_url(video.url)
+                    if video_url:
+                        videos.append(VideoCandidate(
+                            title=video.title,
+                            channel=video.channel,
+                            duration=video.duration,
+                            metadata=video.metadata,
+                            url=video_url,
+                        ))
+                return videos
+            finally:
+                browser.close()
+
     def play_queue(self, queue: MusicQueue) -> None:
         """Play approved candidates through YouTube's supported IFrame API."""
         selected_entries = [
@@ -377,7 +455,7 @@ class BrowserController:
                 while len(completed) < len(valid_entries):
                     try:
                         event = player_server.events.get(timeout=1)
-                    except queue.Empty:
+                    except QueueEmpty:
                         if not page_ready and time.monotonic() >= connect_deadline:
                             message = "O navegador não conseguiu conectar ao player local."
                             for entry in valid_entries:
